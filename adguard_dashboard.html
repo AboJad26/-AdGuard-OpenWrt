@@ -1,0 +1,138 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AdGuard Home Scheduler</title>
+    <style>
+        body { font-family: system-ui, -apple-system, sans-serif; background: #f4f6f9; color: #333; padding: 20px; }
+        .container { max-width: 600px; margin: 0 auto; background: white; padding: 25px; border-radius: 12px; box-shadow: 0 4px 6px rgba(0,0,0,0.05); }
+        h2 { margin-top: 0; color: #68bc71; display: flex; align-items: center; gap: 10px; }
+        .card { background: #fff; border: 1px solid #eee; border-radius: 8px; padding: 15px; margin-bottom: 20px; }
+        
+        select, button { padding: 10px; border-radius: 6px; border: 1px solid #ddd; font-size: 16px; }
+        button { cursor: pointer; border: none; font-weight: bold; transition: 0.2s; }
+        button.add { background: #68bc71; color: white; width: 100%; margin-top: 10px; }
+        button.add:hover { background: #5da665; }
+        
+        button.del { background: #ff6b6b; color: white; padding: 5px 10px; font-size: 14px; }
+        
+        table { width: 100%; border-collapse: collapse; margin-top: 10px; }
+        th { text-align: right; color: #888; font-weight: normal; font-size: 14px; padding-bottom: 10px; border-bottom: 1px solid #eee; }
+        td { padding: 12px 0; border-bottom: 1px solid #f9f9f9; }
+        
+        .badge { padding: 4px 8px; border-radius: 4px; font-size: 12px; font-weight: bold; }
+        .on { background: #e6f9e9; color: #2d7d3d; }
+        .off { background: #ffebeb; color: #c92a2a; }
+        
+        .form-row { display: flex; gap: 10px; }
+        .form-row > * { flex: 1; }
+    </style>
+</head>
+<body>
+
+<div class="container">
+    <h2>
+        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
+        مجدول AdGuard
+    </h2>
+    
+    <div class="card">
+        <div class="form-row">
+            <select id="action">
+                <option value="ON">تشغيل الحظر (ON)</option>
+                <option value="OFF">إيقاف الحظر (OFF)</option>
+            </select>
+            <select id="hour">
+                <!-- Javascript will fill this -->
+            </select>
+            <select id="min">
+                <option value="00">00</option>
+                <option value="15">15</option>
+                <option value="30">30</option>
+                <option value="45">45</option>
+            </select>
+        </div>
+        <button class="add" onclick="addSchedule()">إضافة موعد</button>
+    </div>
+
+    <h3>المواعيد الحالية</h3>
+    <table>
+        <thead>
+            <tr>
+                <th>الإجراء</th>
+                <th>الوقت</th>
+                <th>تحكم</th>
+            </tr>
+        </thead>
+        <tbody id="list">
+            <tr><td colspan="3" style="text-align:center">جاري التحميل...</td></tr>
+        </tbody>
+    </table>
+</div>
+
+<script>
+    // Fill Hours
+    const hourSel = document.getElementById('hour');
+    for(let i=0; i<24; i++) {
+        let h = i < 10 ? '0'+i : i;
+        let opt = document.createElement('option');
+        opt.value = h;
+        opt.innerText = h + ':00';
+        hourSel.appendChild(opt);
+    }
+
+    const API_URL = '/cgi-bin/adguard_api.cgi';
+
+    function loadList() {
+        fetch(API_URL + '?mode=list')
+        .then(res => res.json())
+        .then(data => {
+            const tbody = document.getElementById('list');
+            tbody.innerHTML = '';
+            if(data.length === 0) {
+                tbody.innerHTML = '<tr><td colspan="3" style="text-align:center; color:#999">لا يوجد جداول</td></tr>';
+                return;
+            }
+            
+            data.forEach(item => {
+                let row = `<tr>
+                    <td><span class="badge ${item.action == 'ON' ? 'on' : 'off'}">${item.action == 'ON' ? 'تفعيل' : 'إيقاف'}</span></td>
+                    <td style="font-family:monospace; font-size: 1.1em">${item.hour}:${item.min}</td>
+                    <td><button class="del" onclick="del('${item.id}')">حذف</button></td>
+                </tr>`;
+                tbody.innerHTML += row;
+            });
+        })
+        .catch(err => {
+            document.getElementById('list').innerHTML = '<tr><td colspan="3" style="color:red">خطأ في الاتصال! تأكد أن ملف cgi-bin يعمل.</td></tr>';
+        });
+    }
+
+    function addSchedule() {
+        const h = document.getElementById('hour').value;
+        const m = document.getElementById('min').value;
+        const a = document.getElementById('action').value;
+        
+        fetch(`${API_URL}?mode=add&hour=${h}&min=${m}&action=${a}`)
+        .then(res => res.json())
+        .then(res => {
+            if(res.status === 'success') loadList();
+        });
+    }
+
+    function del(id) {
+        if(!confirm('هل أنت متأكد من الحذف؟')) return;
+        fetch(`${API_URL}?mode=del&id=${id}`)
+        .then(res => res.json())
+        .then(res => {
+            if(res.status === 'success') loadList();
+        });
+    }
+
+    // Init
+    loadList();
+</script>
+
+</body>
+</html>
